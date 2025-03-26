@@ -1,11 +1,11 @@
 import ctypes
 import io
-import requests
 import threading
-import win32clipboard
+
+import requests
 import win32gui
-import win32con
 from PIL import ImageGrab, Image
+import pyperclip
 
 # 手动定义 WM_CLIPBOARDUPDATE
 WM_CLIPBOARDUPDATE = 0x031D
@@ -31,17 +31,39 @@ HEADERS = {
     "Connection": "keep-alive",
 }
 
+
 def upload_image(image):
-    """在后台线程上传图片"""
+    """在后台线程上传图片，并将地址写入剪贴板"""
     def _upload():
         with io.BytesIO() as output:
             image.save(output, format="PNG")
             image_bytes = output.getvalue()
             files = {"file": ("clipboard.png", image_bytes, "image/png")}
+
             response = requests.post(UPLOAD_URL, headers=HEADERS, params=PARAMS, files=files)
-        print(f"图片上传结果: {response.status_code}, {response.text}")
+
+            try:
+                result = response.json()
+                print("上传返回数据:", result)  # 打印查看返回数据结构
+
+                base_url = "https://img.doufei.eu.org"
+                image_url = None
+
+                if isinstance(result, list) and len(result) > 0 and "src" in result[0]:
+                    image_url = base_url + result[0]["src"]  # 拼接完整 URL
+
+                if image_url:
+                    pyperclip.copy(image_url)
+                    print(f"图片上传成功，URL 已复制到剪贴板: {image_url}")
+                else:
+                    print("上传成功，但未返回有效 URL")
+            except Exception as e:
+                print(f"解析返回数据失败: {e}")
 
     threading.Thread(target=_upload, daemon=True).start()  # 开启后台线程
+
+
+
 
 def get_clipboard_image():
     """获取剪贴板中的图片"""
